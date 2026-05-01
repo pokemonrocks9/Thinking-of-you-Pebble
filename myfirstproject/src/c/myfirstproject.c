@@ -39,14 +39,14 @@ static void prv_show_notification(const char *name) {
     Layer *window_layer = window_get_root_layer(s_notification_window);
     GRect bounds = layer_get_bounds(window_layer);
     
-    s_notification_name_layer = text_layer_create(GRect(0, 40, bounds.size.w, 40));
+    s_notification_name_layer = text_layer_create(GRect(0, bounds.size.h / 4, bounds.size.w, 40));
     text_layer_set_background_color(s_notification_name_layer, GColorClear);
     text_layer_set_text_color(s_notification_name_layer, GColorWhite);
     text_layer_set_font(s_notification_name_layer, fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
     text_layer_set_text_alignment(s_notification_name_layer, GTextAlignmentCenter);
     layer_add_child(window_layer, text_layer_get_layer(s_notification_name_layer));
     
-    s_notification_layer = text_layer_create(GRect(0, 85, bounds.size.w, 60));
+    s_notification_layer = text_layer_create(GRect(0, (bounds.size.h / 4) + 45, bounds.size.w, 60));
     text_layer_set_background_color(s_notification_layer, GColorClear);
     text_layer_set_text_color(s_notification_layer, GColorWhite);
     text_layer_set_font(s_notification_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24));
@@ -165,12 +165,13 @@ static void prv_main_window_load(Window *window) {
   window_set_background_color(window, GColorBlack);
   
   s_heart_bitmap = gbitmap_create_with_resource(RESOURCE_ID_HEART_ICON);
-  s_icon_layer = bitmap_layer_create(GRect(52, 20, 40, 40));
+  int icon_size = 40;
+  s_icon_layer = bitmap_layer_create(GRect((bounds.size.w - icon_size) / 2, bounds.size.h / 10, icon_size, icon_size));
   bitmap_layer_set_bitmap(s_icon_layer, s_heart_bitmap);
   bitmap_layer_set_compositing_mode(s_icon_layer, GCompOpSet);
   layer_add_child(window_layer, bitmap_layer_get_layer(s_icon_layer));
   
-  s_status_layer = text_layer_create(GRect(0, 70, bounds.size.w, 30));
+  s_status_layer = text_layer_create(GRect(0, bounds.size.h / 2 - 20, bounds.size.w, 30));
   text_layer_set_background_color(s_status_layer, GColorClear);
   text_layer_set_text_color(s_status_layer, GColorWhite);
   text_layer_set_text(s_status_layer, "Connecting...");
@@ -178,7 +179,7 @@ static void prv_main_window_load(Window *window) {
   text_layer_set_text_alignment(s_status_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_status_layer));
   
-  s_distance_layer = text_layer_create(GRect(0, 100, bounds.size.w, 25));
+  s_distance_layer = text_layer_create(GRect(0, bounds.size.h / 2 + 10, bounds.size.w, 25));
   text_layer_set_background_color(s_distance_layer, GColorClear);
   text_layer_set_text_color(s_distance_layer, GColorWhite);
   text_layer_set_text(s_distance_layer, "");
@@ -186,7 +187,7 @@ static void prv_main_window_load(Window *window) {
   text_layer_set_text_alignment(s_distance_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(s_distance_layer));
   
-  s_instruction_layer = text_layer_create(GRect(10, 125, bounds.size.w - 20, 50));
+  s_instruction_layer = text_layer_create(GRect(10, bounds.size.h - 55, bounds.size.w - 20, 50));
   text_layer_set_background_color(s_instruction_layer, GColorClear);
   text_layer_set_text_color(s_instruction_layer, GColorWhite);
   text_layer_set_text(s_instruction_layer, "Open settings\non phone");
