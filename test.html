@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thinking of You - Test Dashboard</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        h1 { color: #d63384; text-align: center; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+        .btn-primary { background-color: #d63384; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; margin-top: 10px; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        #status { margin-top: 20px; padding: 10px; border-radius: 6px; display: none; text-align: center; }
+        .success { background-color: #d1e7dd; color: #0f5132; display: block !important; }
+        .error { background-color: #f8d7da; color: #842029; display: block !important; }
+        .info-box { font-size: 0.9em; color: #666; background: #eee; padding: 10px; border-radius: 6px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>❤️ Thinking of You</h1>
+    
+    <div class="card">
+        <label for="linkCode">Link Code (from Watch)</label>
+        <input type="text" id="linkCode" placeholder="e.g. ABCDEF" maxlength="6" style="text-transform: uppercase;">
+        
+        <label for="myName">Your Name (The Web User)</label>
+        <input type="text" id="myName" placeholder="e.g. Sarah">
+        
+        <button id="regBtn" class="btn-primary" onclick="register()">Join Connection</button>
+        
+        <div id="connectionStatus" class="info-box" style="display:none;">
+            Checking connection...
+        </div>
+    </div>
+
+    <div class="card" id="pingSection" style="display:none;">
+        <h3>Send a Ping</h3>
+        <p>Click below to send a "Thinking of You" vibration to your partner's watch.</p>
+        <button id="pingBtn" class="btn-primary" onclick="sendPing()">Send Test Ping! 💓</button>
+    </div>
+
+    <div id="status"></div>
+
+    <script>
+        const API_BASE = 'https://mute-elsinore-pokyplays-01040d8f.koyeb.app/api';
+        
+        function showStatus(msg, isError = false) {
+            const el = document.getElementById('status');
+            el.innerText = msg;
+            el.className = isError ? 'error' : 'success';
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        async function checkConnection() {
+            const linkCode = document.getElementById('linkCode').value.toUpperCase();
+            if (!linkCode) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/whoIsRegistered?linkCode=${linkCode}`);
+                const data = await res.json();
+                const statusEl = document.getElementById('connectionStatus');
+                
+                if (data.exists && data.registeredNames.length > 0) {
+                    statusEl.style.display = 'block';
+                    statusEl.innerText = "Registered users: " + data.registeredNames.join(', ');
+                    
+                    // If we are one of the registered users, show the ping section
+                    const myName = document.getElementById('myName').value;
+                    if (myName && data.registeredNames.includes(myName) && data.registeredNames.length > 1) {
+                        document.getElementById('pingSection').style.display = 'block';
+                    }
+                }
+            } catch (e) {
+                console.error("Status check failed", e);
+            }
+        }
+
+        async function register() {
+            const linkCode = document.getElementById('linkCode').value.toUpperCase();
+            const name = document.getElementById('myName').value;
+            const btn = document.getElementById('regBtn');
+
+            if (!linkCode || !name) {
+                alert("Please enter both a Link Code and your Name.");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = "Registering...";
+
+            try {
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linkCode, name })
+                });
+
+                if (response.ok) {
+                    showStatus("Successfully registered!");
+                    checkConnection();
+                    // Auto-poll for partner status
+                    setInterval(checkConnection, 5000);
+                } else {
+                    const err = await response.json();
+                    showStatus("Error: " + (err.error || "Failed to register"), true);
+                }
+            } catch (e) {
+                showStatus("Network error connecting to Koyeb server.", true);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Join Connection";
+            }
+        }
+
+        async function sendPing() {
+            const linkCode = document.getElementById('linkCode').value.toUpperCase();
+            const senderName = document.getElementById('myName').value;
+            const btn = document.getElementById('pingBtn');
+
+            btn.disabled = true;
+            btn.innerText = "Sending...";
+
+            try {
+                const response = await fetch(`${API_BASE}/ping`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ linkCode, senderName })
+                });
+
+                if (response.ok) {
+                    showStatus("Ping sent! Your partner's watch should vibrate.");
+                } else {
+                    const err = await response.json();
+                    showStatus("Error: " + (err.error || "Partner not found/connected"), true);
+                }
+            } catch (e) {
+                showStatus("Failed to send ping.", true);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Send Test Ping! 💓";
+            }
+        }
+
+        // Auto-check connection if values are already in inputs (e.g. on refresh)
+        window.onload = checkConnection;
+    </script>
+</body>
+</html>
