@@ -15,9 +15,26 @@
         .btn-secondary { background-color: #6c757d; color: white; margin-top: 10px; }
         button:disabled { opacity: 0.5; cursor: not-allowed; }
         #status { margin-top: 20px; padding: 10px; border-radius: 6px; display: none; text-align: center; }
+        .toggle-container { display: flex; align-items: center; margin-bottom: 15px; cursor: pointer; font-size: 14px; }
+        .toggle-container input { width: auto; margin-right: 10px; margin-bottom: 0; }
+        .distance-display { 
+            margin-top: 15px; 
+            padding: 12px; 
+            background: #e3f2fd; 
+            border-radius: 8px; 
+            text-align: center; 
+            font-weight: bold; 
+            color: #1976d2;
+            border-left: 4px solid #2196f3;
+        }
         .success { background-color: #d1e7dd; color: #0f5132; display: block !important; }
         .error { background-color: #f8d7da; color: #842029; display: block !important; }
         .info-box { font-size: 0.9em; color: #666; background: #eee; padding: 10px; border-radius: 6px; margin-top: 10px; }
+        .name-button { width: 100%; padding: 10px; background: white; color: #d63384; border: 2px solid #d63384; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px; transition: all 0.2s; }
+        .name-button:hover { background: #fff0f6; }
+        .name-button.selected { background: #d63384; color: white; }
+        .section-title { font-size: 0.9em; font-weight: bold; margin-bottom: 10px; color: #666; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
@@ -25,12 +42,24 @@
     <h1>❤️ Thinking of You</h1>
     
     <div class="card">
-        <label for="linkCode">Link Code (from Watch)</label>
+        <label for="linkCode">Link Code</label>
         <input type="text" id="linkCode" placeholder="e.g. ABCDEF" maxlength="6" style="text-transform: uppercase;">
+        <button id="checkBtn" class="btn-secondary" onclick="checkLinkCode()" style="margin-bottom: 15px;">Find Partners</button>
+
+        <div id="nameSelectionSection" class="hidden">
+            <div class="section-title">Are you one of these users?</div>
+            <div id="nameButtons"></div>
+            <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Or enter your name below to join as someone new.</p>
+        </div>
         
-        <label for="myName">Your Name (The Web User)</label>
+        <label for="myName">Your Name</label>
         <input type="text" id="myName" placeholder="e.g. Sarah">
         
+        <label class="toggle-container">
+            <input type="checkbox" id="shareLocation" checked>
+            <span>Enable Simulated Location Sharing</span>
+        </label>
+
         <button id="regBtn" class="btn-primary" onclick="register()">Join Connection</button>
         
         <div id="connectionStatus" class="info-box" style="display:none;">
@@ -42,6 +71,7 @@
         <h3>Send a Ping</h3>
         <p>Click below to send a "Thinking of You" vibration to your partner's watch.</p>
         <button id="pingBtn" class="btn-primary" onclick="sendPing()">Send Test Ping! 💓</button>
+        <div id="distanceDisplay" class="distance-display" style="display:none;"></div>
     </div>
 
     <div id="status"></div>
@@ -49,11 +79,105 @@
     <script>
         const API_BASE = 'https://mute-elsinore-pokyplays-01040d8f.koyeb.app/api';
         
+        // Cipher logic mirrored from pebble-js-app.js
+        function hashLinkCode(linkCode) {
+            let hash = 0;
+            for (let i = 0; i < linkCode.length; i++) {
+                hash = ((hash << 5) - hash) + linkCode.charCodeAt(i);
+                hash = hash & hash;
+            }
+            return hash.toString(36) + linkCode + hash.toString(16) + linkCode.split('').reverse().join('');
+        }
+
+        function deriveKey(linkCode) {
+            const hashed = hashLinkCode(linkCode);
+            return Array.from(hashed).map(c => c.charCodeAt(0));
+        }
+
+        function jumbleData(data, linkCode) {
+            const key = deriveKey(linkCode);
+            const bytes = Array.from(data).map((c, i) => c.charCodeAt(0) ^ key[i % key.length]);
+            return btoa(String.fromCharCode(...bytes));
+        }
+
+        function unjumbleData(jumbled, linkCode) {
+            try {
+                const binaryString = atob(jumbled);
+                const key = deriveKey(linkCode);
+                return Array.from(binaryString).map((c, i) => 
+                    String.fromCharCode(c.charCodeAt(0) ^ key[i % key.length])
+                ).join('');
+            } catch (e) { return null; }
+        }
+
+        function jumbleCoordinates(lat, lon, linkCode) {
+            const coordString = lat.toFixed(6) + ',' + lon.toFixed(6);
+            return jumbleData(coordString, linkCode);
+        }
+
+        async function fetchDistance() {
+            const linkCode = document.getElementById('linkCode').value.toUpperCase();
+            if (!linkCode) return;
+            try {
+                const res = await fetch(`${API_BASE}/distance?linkCode=${linkCode}`);
+                const data = await res.json();
+                const display = document.getElementById('distanceDisplay');
+                if (data.jumbledDistance) {
+                    const km = parseFloat(unjumbleData(data.jumbledDistance, linkCode));
+                    if (!isNaN(km)) {
+                        const miles = km * 0.621371;
+                        display.style.display = 'block';
+                        display.innerText = miles < 1 ? 
+                            `📍 Partner is ${Math.round(miles * 5280)} ft away` : 
+                            `📍 Partner is ${miles.toFixed(1)} miles away`;
+                    }
+                }
+            } catch (e) { console.error("Dist check failed", e); }
+        }
+
         function showStatus(msg, isError = false) {
             const el = document.getElementById('status');
             el.innerText = msg;
             el.className = isError ? 'error' : 'success';
             setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        async function checkLinkCode() {
+            const code = document.getElementById('linkCode').value.trim().toUpperCase();
+            if (code.length !== 6) {
+                alert('Please enter a valid 6-character link code');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/whoIsRegistered?linkCode=${code}`);
+                const data = await response.json();
+                
+                const section = document.getElementById('nameSelectionSection');
+                const nameButtons = document.getElementById('nameButtons');
+                nameButtons.innerHTML = '';
+                
+                if (data.exists && data.registeredNames.length > 0) {
+                    data.registeredNames.forEach(name => {
+                        const btn = document.createElement('button');
+                        btn.className = 'name-button';
+                        btn.textContent = name;
+                        btn.onclick = () => selectName(name, btn);
+                        nameButtons.appendChild(btn);
+                    });
+                    section.classList.remove('hidden');
+                } else {
+                    section.classList.add('hidden');
+                    alert("No connection found with this code. You can register below to start one!");
+                }
+                checkConnection();
+            } catch (e) { console.error("Error checking link code:", e); }
+        }
+
+        function selectName(name, btn) {
+            document.getElementById('myName').value = name;
+            document.querySelectorAll('.name-button').forEach(b => b.classList.remove('selected'));
+            btn.classList.add('selected');
         }
 
         async function checkConnection() {
@@ -73,6 +197,7 @@
                     const myName = document.getElementById('myName').value;
                     if (myName && data.registeredNames.includes(myName) && data.registeredNames.length > 1) {
                         document.getElementById('pingSection').style.display = 'block';
+                        fetchDistance();
                     }
                 }
             } catch (e) {
@@ -102,6 +227,7 @@
 
                 if (response.ok) {
                     showStatus("Successfully registered!");
+                    document.getElementById('nameSelectionSection').classList.add('hidden');
                     checkConnection();
                     // Auto-poll for partner status
                     setInterval(checkConnection, 5000);
@@ -117,23 +243,42 @@
             }
         }
 
+        function getSimulatedLocation() {
+            return new Promise((resolve) => {
+                navigator.geolocation.getCurrentPosition(
+                    p => resolve({lat: p.coords.latitude, lon: p.coords.longitude}),
+                    () => resolve({lat: 40.7128, lon: -74.0060}) // Default NYC
+                );
+            });
+        }
+
         async function sendPing() {
             const linkCode = document.getElementById('linkCode').value.toUpperCase();
             const senderName = document.getElementById('myName').value;
             const btn = document.getElementById('pingBtn');
+            const shareLocation = document.getElementById('shareLocation').checked;
 
             btn.disabled = true;
             btn.innerText = "Sending...";
 
             try {
+                const payload = { linkCode, senderName };
+                
+                if (shareLocation) {
+                    const loc = await getSimulatedLocation();
+                    payload.jumbledCoords = jumbleCoordinates(loc.lat, loc.lon, linkCode);
+                }
+
                 const response = await fetch(`${API_BASE}/ping`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ linkCode, senderName })
+                    body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {
                     showStatus("Ping sent! Your partner's watch should vibrate.");
+                    // Fetch updated distance after a short delay
+                    setTimeout(fetchDistance, 3000);
                 } else {
                     const err = await response.json();
                     showStatus("Error: " + (err.error || "Partner not found/connected"), true);
