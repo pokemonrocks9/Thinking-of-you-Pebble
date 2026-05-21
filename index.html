@@ -142,8 +142,11 @@
             setTimeout(() => { el.style.display = 'none'; }, 5000);
         }
 
+        let originalName = "";
+
         async function checkLinkCode() {
             const code = document.getElementById('linkCode').value.trim().toUpperCase();
+            originalName = "";
             if (code.length !== 6) {
                 alert('Please enter a valid 6-character link code');
                 return;
@@ -176,12 +179,13 @@
 
         function selectName(name, btn) {
             document.getElementById('myName').value = name;
+            originalName = name;
             document.querySelectorAll('.name-button').forEach(b => b.classList.remove('selected'));
             btn.classList.add('selected');
         }
 
         async function checkConnection() {
-            const linkCode = document.getElementById('linkCode').value.toUpperCase();
+            const linkCode = document.getElementById('linkCode').value.trim().toUpperCase();
             if (!linkCode) return;
 
             try {
@@ -194,8 +198,8 @@
                     statusEl.innerText = "Registered users: " + data.registeredNames.join(', ');
                     
                     // If we are one of the registered users, show the ping section
-                    const myName = document.getElementById('myName').value;
-                    if (myName && data.registeredNames.includes(myName) && data.registeredNames.length > 1) {
+                    const myName = document.getElementById('myName').value.trim();
+                    if (myName && data.registeredNames.includes(myName)) {
                         document.getElementById('pingSection').style.display = 'block';
                         fetchDistance();
                     }
@@ -206,8 +210,8 @@
         }
 
         async function register() {
-            const linkCode = document.getElementById('linkCode').value.toUpperCase();
-            const name = document.getElementById('myName').value;
+            const linkCode = document.getElementById('linkCode').value.trim().toUpperCase();
+            const name = document.getElementById('myName').value.trim();
             const btn = document.getElementById('regBtn');
 
             if (!linkCode || !name) {
@@ -219,14 +223,20 @@
             btn.innerText = "Registering...";
 
             try {
+                const payload = { linkCode, name };
+                if (originalName && originalName !== name) {
+                    payload.oldName = originalName;
+                }
+
                 const response = await fetch(`${API_BASE}/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ linkCode, name })
+                    body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {
                     showStatus("Successfully registered!");
+                    originalName = name;
                     document.getElementById('nameSelectionSection').classList.add('hidden');
                     checkConnection();
                     // Auto-poll for partner status
@@ -253,8 +263,8 @@
         }
 
         async function sendPing() {
-            const linkCode = document.getElementById('linkCode').value.toUpperCase();
-            const senderName = document.getElementById('myName').value;
+            const linkCode = document.getElementById('linkCode').value.trim().toUpperCase();
+            const senderName = document.getElementById('myName').value.trim();
             const btn = document.getElementById('pingBtn');
             const shareLocation = document.getElementById('shareLocation').checked;
 
@@ -280,11 +290,11 @@
                     // Fetch updated distance after a short delay
                     setTimeout(fetchDistance, 3000);
                 } else {
-                    const err = await response.json();
-                    showStatus("Error: " + (err.error || "Partner not found/connected"), true);
+                    const err = await response.json().catch(() => ({ error: "Server error (" + response.status + ")" }));
+                    showStatus("Error: " + (err.error || "Request failed"), true);
                 }
             } catch (e) {
-                showStatus("Failed to send ping.", true);
+                showStatus("Network error: " + e.message, true);
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Send Test Ping! 💓";
